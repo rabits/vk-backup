@@ -1,0 +1,4 @@
+[submodule "lib/vk_api_auth"]
+	path = lib/vk_api_auth
+	url = https://github.com/dzhioev/vk_api_auth.git
+	branch = master
