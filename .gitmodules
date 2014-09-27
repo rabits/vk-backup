@@ -2,3 +2,7 @@
 	path = lib/vk_api_auth
 	url = https://github.com/dzhioev/vk_api_auth.git
 	branch = master
+[submodule "lib/Common"]
+	path = lib/Common
+	url = https://github.com/rabits/common-python.git
+	branch = master
