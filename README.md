@@ -1,21 +1,22 @@
 VK-Backup
 =========
 
-Project created to backup data from vk.com on your storage.
+This script can backup data from vk.com onto your storage. It will create backup directory, fill it by data and update it in next run time.
+
+Usage: run script with --help to see available options.
 
 Features:
 ---------
-* Can download and store (update) json with your dialogs
+* Download known users & friends
+* Download dialogs
+* Download chats
+* Download attachments media
 
 TODO:
 -----
-* Download chats
-* Download friends
-* Download user info
 * Download wall
 * Download groups
 * Download photos, audio, video
-* Download attachments (photos, audio, video)
 * Advanced configuration
 
 Requirements:
@@ -24,7 +25,7 @@ Requirements:
 
 Support:
 --------
-You can support my open-source development by a small Bitcoin donation.
+If you like kitties or my opensource development - you can support me by a small bitcoin donation :)
 
 My bitcoin wallet: `15phQNwkVs3fXxvxzBkhuhXA2xoKikPfUy`
 
