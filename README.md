@@ -3,7 +3,16 @@ VK-Backup
 
 This script can backup data from vk.com onto your storage. It will create backup directory, fill it by data and update it in next run time.
 
-Usage: run script with --help to see available options.
+Usage:
+------
+This repo is using submodules, so you need to clone this git repository recursively:
+
+```sh
+git clone --recursive https://github.com/rabits/vk-backup.git
+```
+
+Run `vk-backup/vk-backup.py --help` to see an available options.
+You can use config ini file to store your configuration.
 
 Features:
 ---------
