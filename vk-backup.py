@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-'''VK-Backup 0.5
+'''VK-Backup 0.6
 
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
@@ -57,6 +57,7 @@ class Api:
         for retry in xrange(3):
             try:
                 params['access_token'] = self.token
+                params['v'] = '5.25'
                 url = "https://api.vk.com/method/%s?%s" % (method, urlencode(params))
                 data = json.loads(urllib2.urlopen(url).read())
                 if 'response' not in data:
@@ -66,7 +67,7 @@ class Api:
                 c.log('warning', 'Retry request %i (3): %s' % (retry, str(e)))
                 time.sleep(2.0*(retry+1))
 
-        return data["response"]
+        return data['response']
 
     def getUserId(self):
         return str(self.user_id)
@@ -137,20 +138,16 @@ class Media:
         return path
 
     def processPhoto(self, data):
-        url_keys = ['src_xxxbig', 'src_xxbig', 'src_xbig', 'src_big', 'src', 'src_small'] 
-
         url = None
-        for key in url_keys:
-            if key in data:
-                url = data[key]
-                break
+        size = 0
+        for key in data.keys():
+            if key.startswith('photo_') and int(key.split('_')[1]) > size:
+                size = int(key.split('_')[1])
+                url = data.pop(key, None)
 
         if url == None:
             c.log('warning', 'Valid url not found in %s' % str(data))
             return
-
-        for key in url_keys:
-            data.pop(key, None)
 
         data['url'] = url
         data['localpath'] = self.download(data['url'])
@@ -187,7 +184,7 @@ class Media:
 # Common messages function for Chats & Dialogs
 def processMessages(data):
     for d in data:
-        d.pop('uid', None)
+        d.pop('user_id', None)
         d.pop('read_state', None)
         d.pop('chat_id', None)
         media.loadAttachments(d)
@@ -240,25 +237,39 @@ class Chats:
 
     def requestChatMessages(self, chat_id):
         chat = self.getChat(chat_id)
-        c.log('debug', 'Requesting chat messages for chat %s "%s"' % (chat_id, chat['data']['title']))
+        c.log('info', 'Requesting chat messages for chat %s "%s"' % (chat_id, chat['data']['title']))
 
-        req_data = {'chat_id': chat_id, 'rev': 1, 'count': 200, 'offset': 0}
-        if len(self.data[chat_id]['log']) > 0:
-            req_data['offset'] = len(self.data[chat_id]['log'])
+        req_data = {'chat_id': chat_id, 'count': 200, 'offset': -200}
+        if len(self.data[chat_id]['log']) == 0:
+            req_data['rev'] = 1
+            req_data['offset'] = 0
+        else:
+            req_data['start_message_id'] = self.data[chat_id]['log'][-1]['id']
 
         while True:
             data = api.request('messages.getHistory', req_data)
-            count = long(data.pop(0))
+            count = data['count']
+            data = data['items']
+
+            if len(data) == 0:
+                c.log('info', '  no new messages %i (%i)' % (len(self.data[chat_id]['log']), count))
+                break
+
+            # Switch to get history by message id
+            if 'start_message_id' not in req_data:
+                req_data['offset'] = -200
+                req_data.pop('rev', None)
+            else:
+                data.reverse()
 
             processMessages(data)
             self.data[chat_id]['log'].extend(data)
 
-            req_data['offset'] += 200
-            if req_data['offset'] >= count:
-                c.log('debug', '  received %i (%i)' % (count, count))
+            req_data['start_message_id'] = data[-1]['id']
+            c.log('info', '  loaded %i, stored %i (%i)' % (len(data), len(self.data[chat_id]['log']), count))
+            if len(data) < 200:
+                c.log('info', '  done')
                 break
-            else:
-                c.log('debug', '  received %i (%i)' % (req_data['offset'], count))
 
     def getChat(self, chat_id):
         if chat_id not in self.data:
@@ -305,12 +316,13 @@ class Dialogs:
 
         while True:
             data = api.request('messages.getDialogs', req_data)
-            count = long(data.pop(0))
+            count = data['count']
+            data = data['items']
             for d in data:
-                if 'chat_id' in d:
-                    chats.requestChatMessages(str(d['chat_id']))
+                if 'chat_id' in d['message']:
+                    chats.requestChatMessages(str(d['message']['chat_id']))
                 else:
-                    self.requestMessages(str(d['uid']))
+                    self.requestMessages(str(d['message']['user_id']))
 
             req_data['offset'] += 200
             if req_data['offset'] >= count:
@@ -318,30 +330,43 @@ class Dialogs:
 
     def requestMessages(self, user_id):
         user = users.getUser(user_id)
-        c.log('debug', 'Requesting messages for user %s %s %s' % (user_id, user['data']['first_name'], user['data']['last_name']))
+        c.log('info', 'Requesting messages for user %s %s %s' % (user_id, user['data']['first_name'], user['data']['last_name']))
 
-        req_data = {'user_id': user_id, 'rev': 1, 'count': 200, 'offset': 0}
+        req_data = {'user_id': user_id, 'count': 200, 'offset': -200}
         if user_id not in self.data:
+            req_data['rev'] = 1
+            req_data['offset'] = 0
             self.data[user_id] = {
                 'id' :  user_id,
                 'log' : []
             }
         elif len(self.data[user_id]['log']) > 0:
-            req_data['offset'] = len(self.data[user_id]['log'])
+            req_data['start_message_id'] = self.data[user_id]['log'][-1]['id']
 
         while True:
             data = api.request('messages.getHistory', req_data)
-            count = long(data.pop(0))
+            count = data['count']
+            data = data['items']
+
+            if len(data) == 0:
+                c.log('info', '  no new messages %i (%i)' % (len(self.data[user_id]['log']), count))
+                break
+
+            # Switch to get history by message id
+            if 'start_message_id' not in req_data:
+                req_data['offset'] = -200
+                req_data.pop('rev', None)
+            else:
+                data.reverse()
 
             processMessages(data)
             self.data[user_id]['log'].extend(data)
 
-            req_data['offset'] += 200
-            if req_data['offset'] >= count:
-                c.log('debug', '  received %i (%i)' % (count, count))
+            req_data['start_message_id'] = data[-1]['id']
+            c.log('info', '  loaded %i, stored %i (%i)' % (len(data), len(self.data[user_id]['log']), count))
+            if len(data) < 200:
+                c.log('info', '  done')
                 break
-            else:
-                c.log('debug', '  received %i (%i)' % (req_data['offset'], count))
 
     def getMessages(self, user_id):
         if user_id not in self.data:
@@ -402,8 +427,8 @@ class Users:
             data = api.request('users.get', {'user_ids': ','.join(user_ids[0:1000]), 'fields': 'photo_max_orig'})
             del user_ids[0:1000]
             for user in data:
-                c.log('debug', '  %i %s %s' % (user['uid'], user['first_name'], user['last_name']))
-                user['id'] = user.pop('uid')
+                c.log('debug', '  %i %s %s' % (user['id'], user['first_name'], user['last_name']))
+                user['id'] = user.pop('id')
                 self.addUser(user)
             if len(user_ids) > 0:
                 c.log('debug', '  left %i' % len(user_ids))
