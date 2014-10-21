@@ -24,6 +24,8 @@ def requestMessages(request, msgs_data):
 
     while True:
         data = Api.request('messages.getHistory', request)
+        if data == None:
+            return
         count = data['count']
         data = data['items']
 

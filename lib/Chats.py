@@ -24,6 +24,8 @@ class Chats(Database):
                 'log': []
             }
         data = Api.request('messages.getChat', {'chat_id': chat_id})
+        if data == None:
+            return
         if len(data['users']) > 0:
             Users.requestUsers([ str(u) for u in data['users'] ])
         self.data[chat_id]['data'] = data

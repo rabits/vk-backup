@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-'''VK-Backup 0.6.1
+'''VK-Backup 0.7.0
 
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
@@ -14,13 +14,13 @@ Usage:
 from lib import Common as c
 from lib import vk_auth
 
-import getpass
-import os
+import getpass, os
 
 c.init_begin(__doc__)
 c.option('-u', '--user', type='string', dest='user', metavar='EMAIL', default=None, help='vk.com account user email (<user>@<host>) (required)')
 c.option('-p', '--password', type='string', dest='password', metavar='PASSWORD', default=None, help='vk.com account password (will be requested if not set)')
-c.option('-d', '--backup-dir', type='string', dest='backup-dir', metavar='PATH', default='backup', help='directory to store data')
+c.option('-d', '--backup-dir', type='string', dest='backup-dir', metavar='PATH', default='backup', help='directory to store data [%default]')
+c.option('--download-threads', type='int', dest='download-threads', metavar='NUM', default=16, help='number of simultaneous media downloads, 0 - disables download at all [%default]')
 c.init_end()
 
 if c.cfg('user') == None:
@@ -29,23 +29,14 @@ if c.cfg('user') == None:
 if c.cfg('password') == None:
     c.cfg('password', getpass.getpass())
 
-from lib import Api
-from lib.Users import S as Users
-from lib.Dialogs import S as Dialogs
-from lib.Chats import S as Chats
+if c.cfg('download-threads') < 0:
+    parser.error('Number of download threads can\'t be lower then zero')
 
 class Backup:
-    '''
-    Basic init class
-    '''
     def __init__(self):
         c.log('debug', 'Init Backup')
 
         self.path = c.cfg('backup-dir')
-
-        # Create directory
-        if not os.path.isdir(self.path):
-            os.makedirs(self.path)
 
     def store(self):
         c.log('debug', 'Store data')
@@ -53,20 +44,44 @@ class Backup:
         Users.store()
         Dialogs.store()
         Chats.store()
+        Media.store()
+
+        with open(os.path.join(self.path, 'backup.json'), 'w') as outfile:
+            outfile.write(str(Api.getUserId()))
 
     def process(self):
         c.log('debug', 'Start processing')
 
-        # Get current user info
-        Users.requestUsers([Api.getUserId()])
-        # Get friends of current user & load users
-        Users.requestUsers(Users.requestFriends(Api.getUserId()))
+        try:
+            Users.requestUsers([Api.getUserId()])
 
-        # Get dialogs info
-        Dialogs.requestDialogs()
+            # Get friends of user & load them
+            Users.requestUsers(Users.requestFriends(Api.getUserId()))
+
+            # Get user photos
+            Users.requestUserPhotos(Api.getUserId())
+
+            # Get user blog
+            Users.requestBlog(Api.getUserId())
+
+            # Get dialogs info
+            Dialogs.requestDialogs()
+
+            # Store data
+            backup.store()
+        except Exception as e:
+            Media.stopDownloads()
+            c.log('error', 'Exception: %s' % str(e))
+            raise e
+
+from lib import Api
+
+from lib.Users import S as Users
+from lib.Dialogs import S as Dialogs
+from lib.Chats import S as Chats
+from lib.Media import S as Media
 
 backup = Backup()
 backup.process()
-backup.store()
 
 c.log('info', 'DONE')

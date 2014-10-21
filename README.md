@@ -16,16 +16,17 @@ You can use config ini file to store your configuration.
 
 Features:
 ---------
-* Download known users & friends
-* Download dialogs
-* Download chats
-* Download attachments media
+* Store known users & friends
+* Dialogs
+* Chats
+* Attachments media
+* Wall
+* Photos
 
 TODO:
 -----
-* Download wall
-* Download groups
-* Download photos, audio, video
+* Groups
+* Photo albums, audio, video
 * Advanced configuration
 
 Requirements:

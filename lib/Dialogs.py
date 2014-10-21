@@ -25,6 +25,8 @@ class Dialogs(Database):
 
         while True:
             data = Api.request('messages.getDialogs', req_data)
+            if data == None:
+                return
             count = data['count']
             data = data['items']
             for d in data:

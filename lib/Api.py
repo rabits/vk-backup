@@ -37,13 +37,17 @@ def request(method, params):
             params['access_token'] = _TOKEN
             params['v'] = '5.25'
             url = "https://api.vk.com/method/%s?%s" % (method, urlencode(params))
-            data = json.loads(urllib2.urlopen(url).read())
+            data = json.loads(urllib2.urlopen(url, None, 30).read())
             if 'response' not in data:
                 raise Exception('no correct response while calling api method "%s", data: %s' % (method, data))
             break
         except Exception as e:
             c.log('warning', 'Retry request %i (3): %s' % (retry, str(e)))
             time.sleep(2.0*(retry+1))
+
+    if 'response' not in data:
+        c.log('error', 'Unable to process request')
+        return None
 
     return data['response']
 
