@@ -17,6 +17,8 @@ import Common as c
 
 from Database import Database
 
+import Api
+
 class Media(Database):
     class Downloader(threading.Thread):
         def __init__(self, queue, report):
@@ -83,7 +85,7 @@ class Media(Database):
             return self.success
 
     def stopDownloads(self):
-        c.log('debug', 'Stopping download threads')
+        c.log('debug', 'Stopping download threads (%i)' % len(self.threads))
         for i in self.threads:
             i.stop()
 
@@ -125,14 +127,15 @@ class Media(Database):
         if 'attachment' in data:
             attachments.append(data['attachment'])
         if 'copy_history' in data:
-            self.loadAttachments(data['copy_history'])
+            for subdata in data['copy_history']:
+                self.loadAttachments(subdata)
         for attach in attachments:
             c.log('debug', 'Processing %s' % attach['type'])
             funcname = 'process' + attach['type'].title()
             if funcname in dir(self):
                 getattr(self, funcname)(attach[attach['type']])
             else:
-                c.log('error', '  unable to find attachment processing function "Media.%s"' % funcname)
+                c.log('error', '  media processing function "Media.%s" is not implemented' % funcname)
                 c.log('debug', str(attach))
 
     def addDownload(self, url, path = None):
@@ -165,15 +168,59 @@ class Media(Database):
             path = os.path.join(data_type, str(mydata['id']))
 
         if path in self.data:
-            return None
+            return path
+
         self.data[path] = mydata
 
         return path
 
+    def requestComments(self, data, data_type, owner_id):
+        if str(owner_id) != Api.getUserId():
+            return
+
+        c.log('debug', 'Requesting comments for %s %i' % (data_type, data['id']))
+
+        if data_type == 'photo':
+            api_method = 'photos.getComments'
+            api_id_name = 'photo_id'
+        elif data_type == 'video':
+            api_method = 'video.getComments'
+            api_id_name = 'video_id'
+        elif data_type == 'wall':
+            api_method = 'wall.getComments'
+            api_id_name = 'post_id'
+        else:
+            c.log('warning', 'Unable to request comments for %s %i - not implemented' % (data_type, data['id']))
+            return
+
+        if 'comments' not in data:
+            data['comments'] = {}
+        if not isinstance(data['comments'], dict):
+            data['comments'] = {}
+
+        req_data = {'owner_id': int(owner_id), api_id_name: int(data['id']), 'count': 100, 'offset': 0}
+
+        while True:
+            subdata = Api.request(api_method, req_data)
+            if subdata == None:
+                return
+            count = subdata['count']
+            subdata = subdata['items']
+            for d in subdata:
+                data['comments'][str(d['date'])] = d
+                self.loadAttachments(data['comments'][str(d['date'])])
+
+            req_data['offset'] += 100
+            if req_data['offset'] >= count:
+                break
+
     def processPhoto(self, data):
+        c.log('debug', 'Processing photo media')
         path = self.preprocess(data, 'photo')
-        if path != None:
+        if 'localpath' not in self.data[path]:
             url = None
+            if 'url' in self.data[path]:
+                url = self.data[path]['url']
             size = 0
             for key in self.data[path].keys():
                 if key.startswith('photo_'):
@@ -188,46 +235,53 @@ class Media(Database):
 
             self.data[path]['url'] = url
             self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
+        self.requestComments(self.data[path], 'photo', self.data[path]['owner_id'])
 
     def processDoc(self, data):
+        c.log('debug', 'Processing doc media')
         path = self.preprocess(data, 'doc')
-        if path != None:
+        if 'localpath' not in self.data[path]:
             self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
 
     def processAudio(self, data):
+        c.log('debug', 'Processing audio media')
         path = self.preprocess(data, 'audio')
-        if path != None:
+        if 'localpath' not in self.data[path]:
             self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
 
     def processWall(self, data):
-        c.log('debug', 'Processing wall attachments')
+        c.log('debug', 'Processing wall media')
+        data['comments'].pop('count', None)
+        data['comments'].pop('can_post', None)
+        self.requestComments(data, 'wall', data['from_id'])
         self.loadAttachments(data)
 
     def processGeo(self, data):
         self.preprocess(data, 'geo')
-        c.log('debug', 'Skipping geo attachment - no data to download')
+        c.log('debug', 'Skipping geo media - no data to download')
 
     def processVideo(self, data):
-        self.preprocess(data, 'video')
-        c.log('debug', 'Skipping video attachment - size of the file is too big')
+        path = self.preprocess(data, 'video')
+        self.requestComments(self.data[path], 'video', self.data[path]['owner_id'])
+        c.log('debug', 'Skipping video media - size of the file is too big')
 
     def processSticker(self, data):
         self.preprocess(data, 'sticker')
-        c.log('debug', 'Skipping sticker attachment - idiotizm')
+        c.log('debug', 'Skipping sticker media - idiotizm')
 
     def processLink(self, data):
-        c.log('debug', 'Skipping link attachment - no data to download')
+        c.log('debug', 'Skipping link media - no data to download')
 
     def processPoll(self, data):
         self.preprocess(data, 'poll')
-        c.log('debug', 'Skipping poll attachment - no data to download')
+        c.log('debug', 'Skipping poll media - no data to download')
 
     def processNote(self, data):
         self.preprocess(data, 'note')
-        c.log('debug', 'Skipping note attachment - no data to download')
+        c.log('debug', 'Skipping note media - no data to download')
 
     def processPresent(self, data):
         self.preprocess(data, 'present')
-        c.log('debug', 'Skipping present attachment - stupid present')
+        c.log('debug', 'Skipping present media - stupid present')
 
 S = Media()

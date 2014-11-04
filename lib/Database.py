@@ -30,7 +30,7 @@ class Database:
             if not os.path.isdir(os.path.dirname(path)):
                 os.makedirs(os.path.dirname(path))
             with codecs.open(path, 'w', 'utf-8') as outfile:
-                json.dump(self.data[i], outfile, indent=1, ensure_ascii=False)
+                json.dump(self.data[i], outfile, indent=1, ensure_ascii=False, sort_keys=True)
 
     def load(self, subdir = None):
         path = self.path if subdir == None else os.path.join(self.path, subdir)

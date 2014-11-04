@@ -41,12 +41,15 @@ class Users(Database):
                 'data': { long(time.time()): newdata },
             }
         else:
+            if self.data[newdata_id]['updated'] > Api.getStartTime():
+                return
             user_data = self.data[newdata_id]['data']
             if len(set(user_data[max(user_data)].items()) & set(newdata.items())) != len(newdata):
                 c.log('debug', 'Adding new data for user %s' % newdata_id)
                 user_data[long(time.time())] = newdata
 
         self.requestProfilePhotos(newdata_id)
+        self.data[newdata_id]['updated'] = long(time.time())
 
     def requestProfilePhotos(self, user_id):
         c.log('debug', 'Requesting profile photos')
@@ -102,7 +105,7 @@ class Users(Database):
             data = data['items']
             for d in data:
                 self.data[user_id]['blog'][str(d['date'])] = d
-                Media.loadAttachments(self.data[user_id]['blog'][str(d['date'])])
+                Media.processWall(self.data[user_id]['blog'][str(d['date'])])
 
             req_data['offset'] += 100
             if req_data['offset'] >= count:

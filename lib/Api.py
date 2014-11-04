@@ -16,11 +16,14 @@ import vk_auth
 
 c.log('debug', 'Init Api')
 
+# Session start time
+_START_TIME = long(time.time())
+
 # Vk application ID
-_CLIENT_ID = '2951857'
+_CLIENT_ID = '4603710'
 
 # Get token & user_id by login
-(_TOKEN, _USER_ID) = vk_auth.auth(c.cfg('user'), c.cfg('password'), _CLIENT_ID, "messages")
+(_TOKEN, _USER_ID) = vk_auth.auth(c.cfg('user'), c.cfg('password'), _CLIENT_ID, "messages,audio,docs,video,photos,wall,friends")
 
 # Last time api call to prevent service overloading
 _LAST_API_CALL = 0
@@ -39,7 +42,16 @@ def request(method, params):
             url = "https://api.vk.com/method/%s?%s" % (method, urlencode(params))
             data = json.loads(urllib2.urlopen(url, None, 30).read())
             if 'response' not in data:
-                raise Exception('no correct response while calling api method "%s", data: %s' % (method, data))
+                if 'error' in data:
+                    c.log('warning', 'Api responded error: %s' % data['error']['error_msg'])
+                    if data['error']['error_code'] in [7, 15, 212]:
+                        return
+                    elif data['error']['error_code'] in [10]:
+                        continue
+                    else:
+                        raise Exception('unknown error code %i, "%s", data: %s' % (data['error']['error_code'], method, data))
+                else:
+                    raise Exception('no correct response while calling api method "%s", data: %s' % (method, data))
             break
         except Exception as e:
             c.log('warning', 'Retry request %i (3): %s' % (retry, str(e)))
@@ -54,4 +66,8 @@ def request(method, params):
 def getUserId():
     global _USER_ID
     return str(_USER_ID)
+
+def getStartTime():
+    global _START_TIME
+    return _START_TIME
 

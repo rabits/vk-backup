@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-'''VK-Backup 0.7.0
+'''VK-Backup 0.8.0
 
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
@@ -46,7 +46,7 @@ class Backup:
         Chats.store()
         Media.store()
 
-        with open(os.path.join(self.path, 'backup.json'), 'w') as outfile:
+        with open(os.path.join(self.path, 'backup.id'), 'w') as outfile:
             outfile.write(str(Api.getUserId()))
 
     def process(self):
@@ -69,10 +69,9 @@ class Backup:
 
             # Store data
             backup.store()
-        except Exception as e:
+        except (Exception, KeyboardInterrupt) as e:
             Media.stopDownloads()
             c.log('error', 'Exception: %s' % str(e))
-            raise e
 
 from lib import Api
 
