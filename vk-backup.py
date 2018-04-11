@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-'''VK-Backup 0.8.0
+'''VK-Backup 0.8.1
 
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
@@ -15,6 +15,7 @@ from lib import Common as c
 from lib import vk_auth
 
 import getpass, os
+from sys import exit
 
 c.init_begin(__doc__)
 c.option('-u', '--user', type='string', dest='user', metavar='EMAIL', default=None, help='vk.com account user email (<user>@<host>) (required)')
@@ -24,13 +25,15 @@ c.option('--download-threads', type='int', dest='download-threads', metavar='NUM
 c.init_end()
 
 if c.cfg('user') == None:
-    parser.error('Unable to get email from the user option')
+    c.log('error', 'Unable to get email from the user option')
+    exit(1)
 
 if c.cfg('password') == None:
     c.cfg('password', getpass.getpass())
 
 if c.cfg('download-threads') < 0:
-    parser.error('Number of download threads can\'t be lower then zero')
+    c.log('error', 'Number of download threads can\'t be lower then zero')
+    exit(1)
 
 class Backup:
     def __init__(self):
