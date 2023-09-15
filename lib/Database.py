@@ -5,12 +5,12 @@
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
 Description: Database storage class
-Required:    python2.7
+Required:    python3.5
 '''
 
-import Common as c
+from . import Common as c
 
-import codecs, json, os
+import json, os
 
 class Database:
     def __init__(self):
@@ -23,14 +23,20 @@ class Database:
         # Loading local data from the storage
         self.load()
 
-    def store(self):
-        c.log('debug', 'Store %s (%i)' % (self.__class__.__name__, len(self.data)))
-        for i in self.data:
-            path = os.path.join(self.path, i + '.json')
+    # ids - array of indexes to store, otherwise will store everything
+    def store(self, ids = None):
+        if not ids:
+            ids = list(self.data.keys())
+        c.log('debug', 'Store %s (%i)' % (self.__class__.__name__, len(ids)))
+        for i in ids:
+            path = os.path.join(self.path, str(i) + '.json')
             if not os.path.isdir(os.path.dirname(path)):
                 os.makedirs(os.path.dirname(path))
-            with codecs.open(path, 'w', 'utf-8') as outfile:
-                json.dump(self.data[i], outfile, indent=1, ensure_ascii=False, sort_keys=True)
+            with open(path, 'w') as outfile:
+                try:
+                    json.dump(self.data[str(i)], outfile, indent=1, ensure_ascii=False, sort_keys=True)
+                except Exception as e:
+                    c.log('error', 'Unable to save to json, skipping: %s' % (self.data[str(i)],))
 
     def load(self, subdir = None):
         path = self.path if subdir == None else os.path.join(self.path, subdir)
@@ -54,6 +60,10 @@ class Database:
         for f in files:
             filename = os.path.join(path, f)
             data_path = os.path.splitext(f)[0] if subdir == None else os.path.join(subdir, os.path.splitext(f)[0])
-            data = json.load(open(filename))
-            self.data[data_path] = data
+            with open(filename) as fd:
+                try:
+                    data = json.load(fd)
+                    self.data[data_path] = data
+                except Exception as e:
+                    c.log('error', 'Unable to load json, skipping: %s' % (filename,))
 

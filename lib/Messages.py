@@ -5,13 +5,13 @@
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
 Description: Module provided common message requests
-Required:    python2.7
+Required:    python3.5
 '''
 
-import Common as c
+from . import Common as c
 
-import Api
-from Media import S as Media
+from . import Api
+from .Media import S as Media
 
 def requestMessages(request, msgs_data):
     request['count'] = 200

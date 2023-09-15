@@ -5,21 +5,21 @@
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
 Description: Chats management
-Required:    python2.7
+Required:    python3.5
 '''
 
-import Common as c
+from . import Common as c
 
-from Database import Database
+from .Database import Database
 
-import Api
-import Messages
-from Users import S as Users
+from . import Api
+from . import Messages
+from .Users import S as Users
 
 class Chats(Database):
     def requestChatInfo(self, chat_id):
-        if chat_id not in self.data:
-            self.data[chat_id] = {
+        if str(chat_id) not in self.data:
+            self.data[str(chat_id)] = {
                 'id':  chat_id,
                 'log': []
             }
@@ -27,18 +27,18 @@ class Chats(Database):
         if data == None:
             return
         if len(data['users']) > 0:
-            Users.requestUsers([ str(u) for u in data['users'] ])
-        self.data[chat_id]['data'] = data
+            Users.requestUsers(data['users'])
+        self.data[str(chat_id)]['data'] = data
 
     def requestChatMessages(self, chat_id):
         chat = self.getChat(chat_id)
         c.log('info', 'Requesting chat messages for chat %s "%s"' % (chat_id, chat['data']['title']))
 
-        Messages.requestMessages({'chat_id': chat_id}, self.data[chat_id])
+        Messages.requestMessages({'chat_id': chat_id}, self.data[str(chat_id)])
 
     def getChat(self, chat_id):
-        if chat_id not in self.data:
+        if str(chat_id) not in self.data:
             self.requestChatInfo(chat_id)
-        return self.data[chat_id]
+        return self.data[str(chat_id)]
 
 S = Chats()

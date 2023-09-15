@@ -1,20 +1,20 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-'''VK-Backup 0.8.1
+'''VK-Backup 0.9.0
 
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
 Description: Script can backup your VK profile to your storage
-Required:    python2.7
+Required:    python3.5
 
 Usage:
   $ ./vk-backup.py --help
 '''
 
 from lib import Common as c
-from lib import vk_auth
 
 import getpass, os
+import traceback
 from sys import exit
 
 c.init_begin(__doc__)
@@ -31,8 +31,8 @@ if c.cfg('user') == None:
 if c.cfg('password') == None:
     c.cfg('password', getpass.getpass())
 
-if c.cfg('download-threads') < 0:
-    c.log('error', 'Number of download threads can\'t be lower then zero')
+if c.cfg('download-threads') < 1:
+    c.log('error', 'Number of download threads can\'t be lower then one')
     exit(1)
 
 class Backup:
@@ -65,22 +65,26 @@ class Backup:
             Users.requestUserPhotos(Api.getUserId())
 
             # Get user blog
-            Users.requestBlog(Api.getUserId())
+            #Users.requestBlog(Api.getUserId())
 
             # Get dialogs info
+            # Unfortunately this functionality was blocked by vk.com for the non-trusted apps...
+            # So instead please use messages_backup.py to use UI API to get your data from Messages
             Dialogs.requestDialogs()
 
             # Store data
             backup.store()
         except (Exception, KeyboardInterrupt) as e:
+            c.log('error', 'Exception: %s: %s' % (str(e), traceback.format_exc()))
             Media.stopDownloads()
-            c.log('error', 'Exception: %s' % str(e))
 
 from lib import Api
 
 from lib.Users import S as Users
-from lib.Dialogs import S as Dialogs
-from lib.Chats import S as Chats
+#from lib.Dialogs import S as Dialogs
+#from lib.Chats import S as Chats
+from lib.DialogsUI import S as Dialogs
+from lib.ChatsUI import S as Chats
 from lib.Media import S as Media
 
 backup = Backup()

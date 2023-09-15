@@ -5,19 +5,21 @@
 Author:      Rabit <home@rabits.org>
 License:     GPL v3
 Description: Media download
-Required:    python2.7
+Required:    python3.5
 '''
 
-import time, urllib2, os
-from urlparse import urlparse
+import time, urllib.request, urllib.error, urllib.parse, os
+from urllib.parse import urlparse
 import threading
-from Queue import Queue
+from queue import Queue
 
-import Common as c
+from . import Common as c
 
-from Database import Database
+from .Database import Database
 
-import Api
+from . import Api
+
+_PHOTO_TYPES = {'s', 'm', 'o', 'p', 'q', 'r', 'x', 'y', 'z', 'w'}
 
 class Media(Database):
     class Downloader(threading.Thread):
@@ -39,6 +41,7 @@ class Media(Database):
                         self.queue.put(url)
                     elif response == False and url.tried == 3:
                         self.report['failure'].append(url)
+                        c.log('warning', 'Downloader thread failed: %s : %s' % (url.url, url.error))
                     elif response == True:
                         self.report['success'].append(url)
                     self.queue.task_done()
@@ -67,15 +70,15 @@ class Media(Database):
                 if not os.path.isdir(directory):
                     os.makedirs(directory)
 
-                u = urllib2.urlopen(self.url, None, 30)
-                with open(self.destination, 'wb') as outfile:
-                    # TODO: limit by size
-                    size = int(u.info().getheaders('Content-Length')[0])
-                    while True:
-                        b = u.read(8192)
-                        if not b:
-                            break
-                        outfile.write(b)
+                with urllib.request.urlopen(self.url, None, 30) as u:
+                    with open(self.destination, 'wb') as outfile:
+                        # TODO: limit by size
+                        size = int(u.getheader('Content-Length', -1))
+                        while True:
+                            b = u.read(8192)
+                            if not b:
+                                break
+                            outfile.write(b)
 
                 self.success = True
 
@@ -114,7 +117,7 @@ class Media(Database):
 
         c.log('info', 'Downloaded %i of %i' % (len(self.report['success']), self.total_downloads))
         if len(self.report['failure']) > 0:
-            c.log('warning', '  failed: %i' % len(self.report['failure']))
+            c.log('warning', '  download failed: %i' % len(self.report['failure']))
             for url in self.report['failure']:
                 c.log('debug', '    %s' % url.url)
 
@@ -160,12 +163,19 @@ class Media(Database):
         # TODO: limit by type
         mydata = data.copy()
         data.clear()
+        if 'id' not in mydata:
+            c.log('warning', 'Unable to find "id" field in data "%s"' % (mydata,))
+            return
         data['id'] = mydata['id']
+
         if 'owner_id' in mydata:
             path = os.path.join(data_type, str(mydata['owner_id']), str(mydata['id']))
             data['owner_id'] = mydata['owner_id']
         else:
             path = os.path.join(data_type, str(mydata['id']))
+
+        if 'suffix' in mydata:
+            data['suffix'] = mydata['suffix']
 
         if path in self.data:
             return path
@@ -219,42 +229,46 @@ class Media(Database):
         path = self.preprocess(data, 'photo')
         if 'localpath' not in self.data[path]:
             url = None
-            if 'url' in self.data[path]:
-                url = self.data[path]['url']
-            size = 0
-            for key in self.data[path].keys():
-                if key.startswith('photo_'):
-                    if int(key.split('_')[1]) > size:
-                        size = int(key.split('_')[1])
-                        url = self.data[path].pop(key, None)
-                    self.data[path].pop(key, None)
+            if 'sizes' not in self.data[path]:
+                c.log('error', 'Unable to find photo sizes in %s' % str(self.data[path]))
+            lastwh = 0
+            # Selecting the biggest image out of available sizes
+            for size_val in self.data[path].get('sizes', []):
+                wh = size_val['width'] * size_val['height']
+                if wh == 0:
+                    # Using latest in sizes array
+                    url = size_val['url']
+                elif lastwh < wh:
+                    lastwh = wh
+                    url = size_val['url']
 
             if url == None:
                 c.log('warning', 'Valid url not found in %s' % str(self.data[path]))
                 return
 
             self.data[path]['url'] = url
-            self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
+            self.data[path]['localpath'] = self.addDownload(url)
         self.requestComments(self.data[path], 'photo', self.data[path]['owner_id'])
 
     def processDoc(self, data):
         c.log('debug', 'Processing doc media')
         path = self.preprocess(data, 'doc')
-        if 'localpath' not in self.data[path]:
+        if 'localpath' not in self.data[path] and 'url' in self.data[path]:
             self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
 
     def processAudio(self, data):
         c.log('debug', 'Processing audio media')
         path = self.preprocess(data, 'audio')
-        if 'localpath' not in self.data[path]:
+        if 'localpath' not in self.data[path] and 'url' in self.data[path]:
             self.data[path]['localpath'] = self.addDownload(self.data[path]['url'])
 
     def processWall(self, data):
         c.log('debug', 'Processing wall media')
-        data['comments'].pop('count', None)
-        data['comments'].pop('can_post', None)
-        self.requestComments(data, 'wall', data['from_id'])
-        self.loadAttachments(data)
+        if 'comments' in data:
+            data['comments'].pop('count', None)
+            data['comments'].pop('can_post', None)
+            self.requestComments(data, 'wall', data['from_id'])
+            self.loadAttachments(data)
 
     def processGeo(self, data):
         self.preprocess(data, 'geo')
@@ -267,7 +281,7 @@ class Media(Database):
 
     def processSticker(self, data):
         self.preprocess(data, 'sticker')
-        c.log('debug', 'Skipping sticker media - idiotizm')
+        c.log('debug', 'Skipping sticker media')
 
     def processLink(self, data):
         c.log('debug', 'Skipping link media - no data to download')
@@ -282,6 +296,10 @@ class Media(Database):
 
     def processPresent(self, data):
         self.preprocess(data, 'present')
-        c.log('debug', 'Skipping present media - stupid present')
+        c.log('debug', 'Skipping present media')
+
+    # Returns list of photo types sorted from worse to best quality
+    def getPhotoTypes(self):
+        return _PHOTO_TYPES
 
 S = Media()
