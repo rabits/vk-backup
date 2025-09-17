@@ -29,7 +29,8 @@ if sys.argv[curl_params_index] != 'curl':
     sys.exit(1)
 
 _HEADERS = {}
-needed_headers = ['Authorization', 'Cookie']
+#needed_headers = ['Authorization', 'Cookie']
+needed_headers = ['Cookie']
 process_arg = curl_params_index # Starting with curl_params_index to not process vk-backup params
 while process_arg < len(sys.argv)-1:
     process_arg += 1
